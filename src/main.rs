@@ -143,7 +143,7 @@ fn render_neutron(x: f32, y: f32) {
 }
 
 fn generate_uranium(u_array: &mut Vec::<Uranium235>, number_of_particles: usize) {
-    push_uranium_to_array(u_array, (number_of_particles - u_array.len()));
+    push_uranium_to_array(u_array, number_of_particles - u_array.len());
     remove_collisions(u_array);
     while u_array.len() < number_of_particles {
         push_uranium_to_array(u_array, number_of_particles - u_array.len());
