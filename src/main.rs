@@ -108,6 +108,8 @@ async fn main() {
     let mut simulation_speed = 1.0;
     let mut paused = false;
     let mut ufp_opacity = 50.0;
+    let mut uranium_to_generate: usize = 1000;
+    reset_simulation(&mut uranium235_array, &mut neutron_array, &mut ufp_array, uranium_to_generate);
 
     loop {
         clear_background(BLACK);
@@ -115,18 +117,36 @@ async fn main() {
         set_default_camera();
 
         fetch_movement(&mut camera);
-        update_camera(&camera);
+        let main_camera = update_camera(&camera);
         draw_poly(0.0, 0.0, 100, 1000.0, 0.0, GRAY);
         render_neutrons(&neutron_array);
-        render_uranium_fission_products(&uranium_fission_product_texture, &ufp_array, ufp_opacity / 75.0);
+        render_uranium_fission_products(
+            &uranium_fission_product_texture,
+            &ufp_array,
+            ufp_opacity / 75.0
+        );
         render_uranium(&uranium235_texture, &uranium235_array);
 
         if is_key_pressed(KeyCode::P) {
             paused = !paused;
         }
+        if is_key_down(KeyCode::Left) {
+            simulation_speed -= 0.1;
+            if simulation_speed < 0.1 {
+                simulation_speed = 0.1;
+            }
+        }
+        if is_key_down(KeyCode::Right) {
+            simulation_speed += 0.1;
+            if simulation_speed > 10.0 {
+                simulation_speed = 10.0;
+            }
+        }
+        
 
         if is_key_pressed(KeyCode::N) {
-            neutron_array.push(Neutron::new(0.0, 0.0));
+            let (mouse_x, mouse_y) = main_camera.screen_to_world(mouse_position().into()).into();
+            neutron_array.push(Neutron::new(mouse_x, mouse_y));
         }
         if !paused {
             for _ in 0..(simulation_speed * 10.0) as usize {
@@ -139,18 +159,31 @@ async fn main() {
         }
 
         egui_macroquad::ui(|egui_ctx| {
-            let window = egui::Window::new("Info");
+            let window = egui::Window::new("Settings").default_open(false);
             window.show(egui_ctx, |ui| {
-                ui.colored_label(egui::Color32::WHITE, "Test");
-                ui.label(format!("Uranium 235: {}", uranium235_array.len()));
-                ui.label(format!("Neutrons   : {}", neutron_array.len()));
+                // ui.colored_label(egui::Color32::WHITE, "Test");
+                ui.label(format!("Uranium 235      : {}", uranium235_array.len()));
+                ui.label(format!("Neutrons            : {}", neutron_array.len()));
+                ui.label(format!("Fission Products: {}", ufp_array.len()));
+                ui.label("");
                 ui.add(egui::Slider::new(&mut simulation_speed, 0.1..=10.0).text("Speed"));
-                ui.add(egui::Slider::new(&mut ufp_opacity, 0.0..=100.0).text("Alpha").step_by(1.0));
+                ui.add(
+                    egui::Slider
+                        ::new(&mut ufp_opacity, 0.0..=100.0)
+                        .text("Alpha")
+                        .step_by(1.0)
+                );
+                ui.label("");
+                ui.label("");
+                ui.label("");
+                ui.add(
+                    egui::Slider
+                        ::new(&mut uranium_to_generate, 10..=2000)
+                        .text("U235 amount")
+                        .step_by(1.0)
+                );
                 if ui.add(egui::Button::new("Generate")).clicked() {
-                    uranium235_array.clear();
-                    neutron_array.clear();
-                    ufp_array.clear();
-                    generate_uranium(&mut uranium235_array, 2000);
+                    reset_simulation(&mut uranium235_array, &mut neutron_array, &mut ufp_array, uranium_to_generate);
                 }
                 ui.allocate_space(ui.available_size());
                 // ui.allocate_space((ui.available_width(), 0.0).into());
@@ -159,6 +192,18 @@ async fn main() {
         egui_macroquad::draw();
         next_frame().await;
     }
+}
+
+fn reset_simulation(
+    uranium235_array: &mut Vec<Uranium235>,
+    neutron_array: &mut Vec<Neutron>,
+    ufp_array: &mut Vec<UraniumFissionProduct>,
+    uranium_to_generate: usize
+) {
+    uranium235_array.clear();
+    neutron_array.clear();
+    ufp_array.clear();
+    generate_uranium(uranium235_array, uranium_to_generate);
 }
 
 fn update_simulation(
@@ -182,7 +227,7 @@ fn update_simulation(
 }
 
 fn update_camera(camera: &Camera) -> Camera2D {
-    let camera = Camera2D {
+    let main_camera = Camera2D {
         zoom: vec2(
             camera.zoom_scale * 0.0001,
             (screen_width() / screen_height()) * camera.zoom_scale * 0.0001
@@ -190,8 +235,8 @@ fn update_camera(camera: &Camera) -> Camera2D {
         target: (camera.x, camera.y).into(),
         ..Default::default()
     };
-    set_camera(&camera);
-    return camera;
+    set_camera(&main_camera);
+    return main_camera;
 }
 
 fn render_uranium(uranium235_texture: &Texture2D, uranium235_array: &Vec<Uranium235>) {
@@ -214,7 +259,12 @@ fn render_uranium_fission_products(
                 Color::new(1.0, 1.0, 1.0, ufp_opacity)
             );
         } else {
-            render_particle(uranium_fission_product_texture, ufp_array[i].x, ufp_array[i].y, Color::new(1.0, 1.0, 1.0, ufp_opacity - 0.5));
+            render_particle(
+                uranium_fission_product_texture,
+                ufp_array[i].x,
+                ufp_array[i].y,
+                Color::new(1.0, 1.0, 1.0, ufp_opacity - 0.5)
+            );
         }
     }
 }
@@ -271,13 +321,14 @@ fn generate_uranium(u_array: &mut Vec<Uranium235>, number_of_particles: usize) {
 }
 
 fn push_uranium_to_array(u_array: &mut Vec<Uranium235>, number_of_particles: usize) {
-    let size = 1000.0;
+    let size = (number_of_particles + u_array.len()) as f32;
+    let smart_size = (size / 3.1415926535).sqrt() * 40.0;
     for _ in 0..number_of_particles {
-        let mut x = 1000.0;
-        let mut y = 1000.0;
-        while x * x + y * y > 970000.0 {
-            x = rand::gen_range(-size, size);
-            y = rand::gen_range(-size, size);
+        let mut x = f32::INFINITY;
+        let mut y = f32::INFINITY;
+        while x * x + y * y > smart_size * 970.0 {
+            x = rand::gen_range(-1000.0, 1000.0);
+            y = rand::gen_range(-1000.0, 1000.0);
         }
         u_array.push(Uranium235 { x, y });
     }
