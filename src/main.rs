@@ -1,7 +1,14 @@
-// #![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"] // This line is used to hide console window when compiling to windows
+
+/*
+PS
+This code should not be used for educational purposes,
+it just works, thats it.
+*/
 
 use macroquad::prelude::*;
 use egui_macroquad::*;
+use egui_macroquad::egui::RichText;
 
 fn config() -> Conf {
     return Conf {
@@ -109,7 +116,12 @@ async fn main() {
     let mut paused = false;
     let mut ufp_opacity = 50.0;
     let mut uranium_to_generate: usize = 1000;
-    reset_simulation(&mut uranium235_array, &mut neutron_array, &mut ufp_array, uranium_to_generate);
+    reset_simulation(
+        &mut uranium235_array,
+        &mut neutron_array,
+        &mut ufp_array,
+        uranium_to_generate
+    );
 
     loop {
         clear_background(BLACK);
@@ -142,7 +154,6 @@ async fn main() {
                 simulation_speed = 10.0;
             }
         }
-        
 
         if is_key_pressed(KeyCode::N) {
             let (mouse_x, mouse_y) = main_camera.screen_to_world(mouse_position().into()).into();
@@ -159,38 +170,73 @@ async fn main() {
         }
 
         egui_macroquad::ui(|egui_ctx| {
-            let window = egui::Window::new("Settings").default_open(false);
+            let window = egui::Window::new("Settings").default_open(true).resizable(false);
             window.show(egui_ctx, |ui| {
-                // ui.colored_label(egui::Color32::WHITE, "Test");
-                ui.label(format!("Uranium 235      : {}", uranium235_array.len()));
-                ui.label(format!("Neutrons            : {}", neutron_array.len()));
-                ui.label(format!("Fission Products: {}", ufp_array.len()));
+                ui.label(format!("Press P to {} the simulation\n", paused_str(paused)));
+                ui.label(format!("Uranium 235      : {}", uranium235_array.len())).on_hover_text(
+                    "Current amount of U235 in simulation"
+                );
+                ui.label(format!("Neutrons            : {}", neutron_array.len())).on_hover_text(
+                    "Current amount of Neutrons in simulation"
+                );
+                ui.label(format!("Fission Products: {}", ufp_array.len())).on_hover_text(
+                    "Current amount of FP in simulation"
+                );
                 ui.label("");
-                ui.add(egui::Slider::new(&mut simulation_speed, 0.1..=10.0).text("Speed"));
+                ui.add(
+                    egui::Slider::new(&mut simulation_speed, 0.1..=10.0).text("Simulation Speed")
+                ).on_hover_text(
+                    "You can also use Arrow Keys on your keyboard \n\n You also can press P to pause/resume at any time"
+                );
                 ui.add(
                     egui::Slider
                         ::new(&mut ufp_opacity, 0.0..=100.0)
-                        .text("Alpha")
+                        .text("FP Opacity")
                         .step_by(1.0)
-                );
-                ui.label("");
-                ui.label("");
+                ).on_hover_text("Uranium Fission Products Opacity (%)");
                 ui.label("");
                 ui.add(
                     egui::Slider
                         ::new(&mut uranium_to_generate, 10..=2000)
                         .text("U235 amount")
                         .step_by(1.0)
-                );
-                if ui.add(egui::Button::new("Generate")).clicked() {
-                    reset_simulation(&mut uranium235_array, &mut neutron_array, &mut ufp_array, uranium_to_generate);
+                ).on_hover_text("Amount of Uranium 235 to generate");
+                if
+                    ui
+                        .add(egui::Button::new("Generate"))
+                        .on_hover_text("Reset simulation with specified amount of U235")
+                        .clicked()
+                {
+                    reset_simulation(
+                        &mut uranium235_array,
+                        &mut neutron_array,
+                        &mut ufp_array,
+                        uranium_to_generate
+                    );
                 }
-                ui.allocate_space(ui.available_size());
-                // ui.allocate_space((ui.available_width(), 0.0).into());
+                ui.label("\n\n");
+                ui.label(RichText::new("HELP").strong()).on_hover_text(
+                    format!(
+                        "{}\n\n{}\n\n{}\n\n{}\n\n{}",
+                        "W A S D    ->   Camera Movement",
+                        "Shift/Space    ->   Zoom In/Out",
+                        "N    ->   Spawn new neutron at mouse cursor",
+                        "Arrow Keys    ->   Change speed of the simulation",
+                        "P    -> Pause/Resume the simulation"
+                    )
+                );
             });
         });
         egui_macroquad::draw();
         next_frame().await;
+    }
+}
+
+fn paused_str(paused: bool) -> String {
+    if paused {
+        return "resume".to_string();
+    } else {
+        return "pause".to_string();
     }
 }
 
